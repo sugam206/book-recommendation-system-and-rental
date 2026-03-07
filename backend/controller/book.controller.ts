@@ -1,0 +1,260 @@
+import { Types } from "mongoose";
+import asyncHandeler from "../middleware/asyncHandler.ts";
+import type { Request, Response } from 'express';
+import path from 'path';
+import fs from 'fs/promises';
+import { UserModel } from "../modules/user/user.model.ts";
+import { BookModel } from "../modules/books/book.model.ts";
+import { RentModel } from "../modules/rent/rent.model.ts";
+
+declare global {
+    namespace Express {
+        interface Request {
+            user?: {
+                id: Types.ObjectId;
+                role: 'user' | 'admin';
+            };
+            file?: Express.Multer.File;
+        }
+    }
+}
+
+export class BookController {
+
+    // ─── POST / ───────────────────────────────────────────────────────────────
+    createBook = asyncHandeler(async (req: Request, res: Response) => {
+        if (!req.user?.id) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const user = await UserModel.findById(req.user.id).select('role rentalStatus');
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const canCreateBook = user.role === 'admin' || user.rentalStatus === 'approved';
+        if (!canCreateBook) {
+            return res.status(403).json({
+                message: 'Only admins or approved renters can add books for rent'
+            });
+        }
+
+        const { title, authorName, publishedDate, pages, description, genre, tags } = req.body;
+
+        if (!title || !authorName || !publishedDate || !pages) {
+            return res.status(400).json({ message: 'title, authorName, publishedDate and pages are required' });
+        }
+        if (!req.file) {
+            return res.status(400).json({ message: 'Cover image is required' });
+        }
+
+        const book = await BookModel.create({
+            ownerId: req.user.id,
+            title,
+            authorName,
+            image: `/uploads/books/${path.basename(req.file.path)}`,
+            publishedDate: new Date(publishedDate),
+            pages: Number(pages),
+            lastUpdatedDate: new Date(),
+            isFavourite: false,
+            description: description || '',
+            genre: genre
+                ? (Array.isArray(genre) ? genre : [genre])
+                : [],
+            tags: tags
+                ? (Array.isArray(tags) ? tags : String(tags).split(',').map((t: string) => t.trim()).filter(Boolean))
+                : [],
+        });
+
+        res.status(201).json({ book });
+    });
+
+    getMyBooks = asyncHandeler(async (req: Request, res: Response) => {
+        if (!req.user?.id) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const [books, user] = await Promise.all([
+            BookModel.find({ ownerId: req.user.id }).sort({ lastUpdatedDate: -1 }),
+            UserModel.findById(req.user.id).select('savedBooks')
+        ]);
+
+        const favSet = new Set((user?.savedBooks || []).map((id: Types.ObjectId) => id.toString()));
+        const booksWithFlag = books.map((book) => ({
+            ...book.toObject(),
+            isFavourite: favSet.has(book._id.toString())
+        }));
+
+        res.status(200).json({ books: booksWithFlag });
+    });
+
+    // ─── GET / ────────────────────────────────────────────────────────────────
+    getAllBooks = asyncHandeler(async (req: Request, res: Response) => {
+        if (!req.user?.id) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const search = (req.query.search as string) || '';
+
+        const query = search
+            ? {
+                $or: [
+                    { title: { $regex: search, $options: 'i' } },
+                    { authorName: { $regex: search, $options: 'i' } },
+                    { genre: { $regex: search, $options: 'i' } },
+                    { tags: { $regex: search, $options: 'i' } },
+                ],
+            }
+            : {};
+
+        const [books, total] = await Promise.all([
+            BookModel.find(query)
+                .sort({ lastUpdatedDate: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit),
+            BookModel.countDocuments(query),
+        ]);
+
+        const unavailableBookIds = await RentModel.find({
+            bookId: { $in: books.map((b) => b._id) },
+            status: { $in: ['pending', 'active'] }
+        }).distinct('bookId');
+        const unavailableSet = new Set(unavailableBookIds.map((id: Types.ObjectId) => id.toString()));
+
+        // mark favourites from user
+        const user = await UserModel.findById(req.user.id);
+        const favSet = new Set(user?.savedBooks?.map((id: Types.ObjectId) => id.toString()));
+        const readingMap = new Map(
+            (user?.readingList || []).map((entry: any) => [entry.bookId.toString(), entry.status])
+        );
+        const ratingMap = new Map(
+            (user?.bookRatings || []).map((entry: any) => [entry.bookId.toString(), entry.rating])
+        );
+        const booksWithFlag = books.map(b => ({
+            ...b.toObject(),
+            isFavourite: favSet.has(b._id.toString()),
+            readingStatus: readingMap.get(b._id.toString()) || null,
+            myRating: ratingMap.get(b._id.toString()) || null,
+            isAvailableForRent: !unavailableSet.has(b._id.toString())
+        }));
+
+        res.status(200).json({
+            books: booksWithFlag,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        });
+    });
+
+    // ─── GET /:id ─────────────────────────────────────────────────────────────
+    getBookById = asyncHandeler(async (req: Request, res: Response) => {
+        if (!req.user?.id) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const book = await BookModel.findById(req.params.id);
+        if (!book) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+        const user = await UserModel.findById(req.user.id);
+        const isFav = user?.savedBooks?.some((id: Types.ObjectId) => id.toString() === book._id.toString());
+        const readingEntry = (user?.readingList || []).find((entry: any) => entry.bookId.toString() === book._id.toString());
+        const ratingEntry = (user?.bookRatings || []).find((entry: any) => entry.bookId.toString() === book._id.toString());
+        const activeOrPendingRent = await RentModel.findOne({
+            bookId: book._id,
+            status: { $in: ['pending', 'active'] }
+        }).select('_id');
+
+        res.status(200).json({
+            book: {
+                ...book.toObject(),
+                isFavourite: !!isFav,
+                readingStatus: readingEntry?.status || null,
+                myRating: ratingEntry?.rating || null,
+                isAvailableForRent: !activeOrPendingRent
+            }
+        });
+    });
+
+    // ─── PUT /:id ─────────────────────────────────────────────────────────────
+    updateBook = asyncHandeler(async (req: Request, res: Response) => {
+        if (req.user?.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const existing = await BookModel.findById(req.params.id);
+        if (!existing) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+
+        // Build update payload from body fields
+        const { title, authorName, publishedDate, pages, description, genre, tags, isFavourite } = req.body;
+
+        const updateData: Record<string, any> = {
+            lastUpdatedDate: new Date(),
+        };
+
+        if (title) updateData.title = title;
+        if (authorName) updateData.authorName = authorName;
+        if (publishedDate) updateData.publishedDate = new Date(publishedDate);
+        if (pages) updateData.pages = Number(pages);
+        if (description !== undefined) updateData.description = description;
+        if (isFavourite !== undefined) updateData.isFavourite = isFavourite === 'true' || isFavourite === true;
+        if (genre) updateData.genre = Array.isArray(genre) ? genre : [genre];
+        if (tags) updateData.tags = Array.isArray(tags)
+            ? tags
+            : String(tags).split(',').map((t: string) => t.trim()).filter(Boolean);
+
+        // BUG FIX: use updateData (not req.body) so new image path is included
+        if (req.file) {
+            // Delete old image from disk
+            if (existing.image) {
+                const oldImagePath = path.join('uploads/books', path.basename(existing.image));
+                try {
+                    await fs.unlink(oldImagePath);
+                } catch (err) {
+                    console.warn('Could not delete old image:', err);
+                }
+            }
+            updateData.image = `/uploads/books/${path.basename(req.file.path)}`;
+        }
+
+        const updatedBook = await BookModel.findByIdAndUpdate(
+            req.params.id,
+            updateData,          // ← was incorrectly { ...req.body } before
+            { new: true, runValidators: true }
+        );
+
+        res.status(200).json({ book: updatedBook });
+    });
+
+    // ─── DELETE /:id ──────────────────────────────────────────────────────────
+    deleteBook = asyncHandeler(async (req: Request, res: Response) => {
+        if (req.user?.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const book = await BookModel.findByIdAndDelete(req.params.id);
+        if (!book) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+
+        // BUG FIX: delete image file from disk (was missing before)
+        if (book.image) {
+            const imagePath = path.join('uploads/books', path.basename(book.image));
+            try {
+                await fs.unlink(imagePath);
+            } catch (err) {
+                console.warn('Could not delete image file:', err);
+            }
+        }
+
+        res.status(200).json({ message: 'Book deleted successfully' });
+    });
+}
+
