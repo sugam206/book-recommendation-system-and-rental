@@ -33,8 +33,6 @@ export const fetchRents = createAsyncThunk(
                 Authorization: `Bearer ${token}`,
             },
         });
-        // endpoint returns { rents: [...], pagination: {...} }
-        // make sure to return just the array when consuming via slice
         return response.data.rents || response.data;
     }
 );

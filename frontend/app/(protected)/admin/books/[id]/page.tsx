@@ -48,6 +48,8 @@ export default function AdminBookDetailPage() {
       </div>
       <img src={book.image?.startsWith('http') ? book.image : `http://localhost:5000/${book.image}`} alt={book.title} className="h-72 w-52 rounded object-cover" />
       <p><span className="font-semibold">Author:</span> {book.authorName}</p>
+      <p><span className="font-semibold">Price / Deposit:</span> Rs. {book.price}</p>
+      <p><span className="font-semibold">Rental Provider:</span> {book.rentalProviderId || '-'}</p>
       <p><span className="font-semibold">Pages:</span> {book.pages}</p>
       <p><span className="font-semibold">Published:</span> {new Date(book.publishedDate).toLocaleDateString()}</p>
       <p><span className="font-semibold">Genre:</span> {(book.genre || []).join(', ') || '-'}</p>

@@ -70,7 +70,7 @@ export default function BookRentalLanding() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
               <BookOpen className="w-8 h-8 text-[#D7B19D]" />
-              <span className="text-2xl font-bold text-[#D7B19D]">hamro kitab</span>
+              <span className="text-2xl font-bold text-[#D7B19D]">Hamro Kitab</span>
             </div>
 
             <div className="hidden md:flex items-center space-x-8">
@@ -105,8 +105,8 @@ export default function BookRentalLanding() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
+      <section className="relative  overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 ml-120 sm:px-6 lg:px-8 py-20 lg:py-32">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-8 animate-fade-in">
               <h1 className="text-5xl lg:text-6xl font-bold text-[#402218] leading-tight">
@@ -126,27 +126,7 @@ export default function BookRentalLanding() {
               </div>
             </div>
 
-            <div className="relative">
-              <div className="bg-[#402218] rounded-3xl p-8 shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-300">
-                <div className="bg-[#D7B19D] rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <Star className="w-6 h-6 text-[#402218] fill-current" />
-                    <span className="text-[#402218] font-semibold text-lg">Recommended for You</span>
-                  </div>
-                  {genres.map((genre, i) => (
-                    <div key={i} className="bg-white p-4 rounded-xl hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-[#402218]">{genre}</div>
-                          <div className="text-sm text-gray-600">5 books available</div>
-                        </div>
-                        <ArrowRight className="w-5 h-5 text-[#402218]" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
       </section>
@@ -242,7 +222,7 @@ export default function BookRentalLanding() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <BookOpen className="w-8 h-8 text-[#D7B19D]" />
-                <span className="text-2xl font-bold text-[#D7B19D]">BookWise</span>
+                <span className="text-2xl font-bold text-[#D7B19D]">Hamro Kitab</span>
               </div>
               <p className="text-[#D7B19D] opacity-80">Your intelligent book rental companion</p>
             </div>

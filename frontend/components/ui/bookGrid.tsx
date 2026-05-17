@@ -8,7 +8,7 @@ import { toggleFavoriteBook, upsertMyBookStatus } from "@/app/reduxToolkit/slice
 
 export interface IBook {
     id: string;
-    ownerId?: string;
+    rentalProviderId?: string;
     bookName: string;
     authorName: string;
     image: string;
@@ -23,6 +23,8 @@ export interface IBook {
     tags?: string[];
     readingStatus?: "want_to_read" | "reading" | "completed" | null;
     isAvailableForRent?: boolean;
+    availabilityStatus?: "available" | "pending_provider_review" | "awaiting_admin_confirmation" | "refund_in_progress" | "rented_out";
+    availabilityMessage?: string;
 }
 
 interface BookGridProps {
@@ -145,6 +147,9 @@ function BookCard({
                     <span className="opacity-40">|</span>
                     <span>{formatDate(item.publishedDate)}</span>
                 </div>
+                <p className={`mt-1 text-[0.7rem] font-medium ${item.isAvailableForRent === false ? "text-red-600" : "text-green-700"}`}>
+                    {item.availabilityMessage || (item.isAvailableForRent === false ? "Unavailable for rent" : "Available for rent")}
+                </p>
 
                 <div className="mt-3 flex items-center gap-2">
                     <button

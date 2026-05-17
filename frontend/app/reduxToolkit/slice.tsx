@@ -12,16 +12,17 @@ const resolveImageUrl = (value?: string) => {
     return `${API_BASE_URL}${path}`;
 };
 
-// ─── Type — synced with your Mongoose BookSchema ──────────────────────────────
+
 export interface Book {
-    id: string;           // frontend id (mapped from _id)
-    ownerId?: string;
-    bookName: string;     // mapped from title
+    id: string;
+    rentalProviderId?: string;
+    bookName: string;
     image: string;
     authorName: string;
+    price: number;
     publishedDate: string;
     pages: number;
-    genre: string[];      // FIX: was string, schema has string[]
+    genre: string[];
     isFavourite: boolean;
     averageRating?: number;
     ratingsCount?: number;
@@ -31,10 +32,18 @@ export interface Book {
     readingStatus?: 'want_to_read' | 'reading' | 'completed' | null;
     myRating?: number | null;
     isAvailableForRent?: boolean;
+    availabilityStatus?: 'available' | 'pending_provider_review' | 'awaiting_admin_confirmation' | 'refund_in_progress' | 'rented_out';
+    availabilityMessage?: string;
 }
 
 interface BookState {
     books: Book[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    };
     filter: {
         search: string;
         genre: string;
@@ -43,12 +52,12 @@ interface BookState {
     error: string | null;
 }
 
-// ─── Map backend _id / title / authorName → frontend shape ───────────────────
 const mapBook = (raw: any): Book => ({
     id: raw._id ?? raw.id,
-    ownerId: raw.ownerId,
+    rentalProviderId: raw.rentalProviderId,
     bookName: raw.title ?? raw.bookName,
     authorName: raw.authorName,
+    price: Number(raw.price ?? 0),
     image: resolveImageUrl(raw.image),
     publishedDate: raw.publishedDate,
     pages: raw.pages,
@@ -62,10 +71,18 @@ const mapBook = (raw: any): Book => ({
     readingStatus: raw.readingStatus ?? null,
     myRating: raw.myRating ?? null,
     isAvailableForRent: raw.isAvailableForRent ?? true,
+    availabilityStatus: raw.availabilityStatus ?? 'available',
+    availabilityMessage: raw.availabilityMessage ?? (raw.isAvailableForRent === false ? 'Currently not available for rent' : 'Available for rent'),
 });
 
 const initialState: BookState = {
     books: [],   // start empty — loaded from API
+    pagination: {
+        total: 0,
+        page: 1,
+        limit: 10,
+        totalPages: 0,
+    },
     filter: {
         search: "",
         genre: "all",
@@ -78,11 +95,12 @@ const initialState: BookState = {
 
 export const fetchBooks = createAsyncThunk(
     'books/fetchBooks',
-    async (_, { getState, rejectWithValue }) => {
+    async (params: { page?: number; limit?: number; search?: string } | undefined, { getState, rejectWithValue }) => {
         try {
             const state = getState() as RootState;
             const token = state.auth.token;
             const response = await axios.get('http://localhost:5000/api/books', {
+                params,
                 headers: {
                     Authorization: token ? `Bearer ${token}` : "",
                     "Content-Type": "application/json",
@@ -90,7 +108,10 @@ export const fetchBooks = createAsyncThunk(
             });
             // FIX: backend returns { books: [], pagination: {} } — was using response.data directly
             const raw = response.data.books ?? response.data;
-            return (Array.isArray(raw) ? raw : []).map(mapBook);
+            return {
+                books: (Array.isArray(raw) ? raw : []).map(mapBook),
+                pagination: response.data.pagination ?? initialState.pagination,
+            };
         } catch (error) {
             return rejectWithValue("Failed to fetch books");
         }
@@ -264,7 +285,13 @@ const bookSlice = createSlice({
             })
             .addCase(fetchBooks.fulfilled, (state, action) => {
                 state.loading = false;
-                state.books = action.payload;  // FIX: now correctly mapped array
+                state.books = action.payload.books;
+                state.pagination = {
+                    total: action.payload.pagination.total ?? 0,
+                    page: action.payload.pagination.page ?? 1,
+                    limit: action.payload.pagination.limit ?? state.pagination.limit,
+                    totalPages: action.payload.pagination.totalPages ?? 1,
+                };
             })
             .addCase(fetchBooks.rejected, (state, action) => {
                 state.loading = false;

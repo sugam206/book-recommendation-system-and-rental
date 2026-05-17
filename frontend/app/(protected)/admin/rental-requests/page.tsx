@@ -137,10 +137,11 @@ const RentalRequestsPage = () => {
             </div>
 
             {pagination.pages > 1 && (
-                <div className="flex justify-center gap-2 mt-6">
+                <div className="flex justify-center gap-2 mt-6 flex-wrap">
                     {Array.from({ length: pagination.pages }, (_, i) => i + 1).map((page) => (
                         <button
                             key={page}
+                            onClick={() => dispatch(getPendingRequests({ token: token || '', status: activeTab, page }))}
                             className={`px-3 py-1 rounded ${pagination.page === page
                                 ? 'bg-orange-500 text-white'
                                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./reduxToolkit/provider";
+import NotificationToaster from "@/components/notifications/NotificationToaster";
 
 
 
@@ -20,7 +21,7 @@ export default function RootLayout({
       <body className="antialiased bg-[#D7B19D]">
         <Providers>
           <main className="  ">
-
+            <NotificationToaster />
             {children}
           </main>
         </Providers>

@@ -27,7 +27,9 @@ const Topbar = () => {
     useEffect(() => {
         setQuery(globalSearch || "");
     }, [globalSearch]);
+    useEffect(() => {
 
+    })
     useEffect(() => {
         const navController = () => {
             const currentScrollY = window.scrollY

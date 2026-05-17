@@ -14,11 +14,25 @@ export default function AdminBookEditPage() {
   const router = useRouter();
   const id = params.id as string;
 
-  const [form, setForm] = useState({ title: '', authorName: '', publishedDate: '', pages: '', description: '', genre: '', tags: '' });
+  const [form, setForm] = useState({ title: '', authorName: '', price: '', rentalProviderId: '', publishedDate: '', pages: '', description: '', genre: '', tags: '' });
+  const [providers, setProviders] = useState<{ _id: string; username: string; email: string; rentalStatus?: string }[]>([]);
   const [image, setImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadProviders = async () => {
+      if (!token) return;
+      try {
+        const response = await axios.get(`${API_BASE}/users`, { headers: { Authorization: `Bearer ${token}` } });
+        setProviders((response.data?.users || []).filter((user: { rentalStatus?: string }) => user.rentalStatus === 'approved'));
+      } catch {
+        setProviders([]);
+      }
+    };
+    loadProviders();
+  }, [token]);
 
   useEffect(() => {
     const run = async () => {
@@ -30,6 +44,8 @@ export default function AdminBookEditPage() {
         setForm({
           title: b?.title || '',
           authorName: b?.authorName || '',
+          price: b?.price !== undefined ? String(b.price) : '',
+          rentalProviderId: b?.rentalProviderId || '',
           publishedDate: b?.publishedDate ? String(b.publishedDate).slice(0, 10) : '',
           pages: b?.pages ? String(b.pages) : '',
           description: b?.description || '',
@@ -54,6 +70,8 @@ export default function AdminBookEditPage() {
       const fd = new FormData();
       fd.append('title', form.title);
       fd.append('authorName', form.authorName);
+      fd.append('price', form.price);
+      fd.append('rentalProviderId', form.rentalProviderId);
       fd.append('publishedDate', form.publishedDate);
       fd.append('pages', form.pages);
       fd.append('description', form.description);
@@ -79,6 +97,15 @@ export default function AdminBookEditPage() {
       {error && <p className="text-red-600">{error}</p>}
       <input className="w-full rounded border px-3 py-2" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" />
       <input className="w-full rounded border px-3 py-2" value={form.authorName} onChange={(e) => setForm({ ...form, authorName: e.target.value })} placeholder="Author" />
+      <input type="number" className="w-full rounded border px-3 py-2" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Price / Deposit" />
+      <select className="w-full rounded border px-3 py-2" value={form.rentalProviderId} onChange={(e) => setForm({ ...form, rentalProviderId: e.target.value })}>
+        <option value="">Select rental provider</option>
+        {providers.map((provider) => (
+          <option key={provider._id} value={provider._id}>
+            {provider.username} ({provider.email})
+          </option>
+        ))}
+      </select>
       <input type="date" className="w-full rounded border px-3 py-2" value={form.publishedDate} onChange={(e) => setForm({ ...form, publishedDate: e.target.value })} />
       <input type="number" className="w-full rounded border px-3 py-2" value={form.pages} onChange={(e) => setForm({ ...form, pages: e.target.value })} placeholder="Pages" />
       <input className="w-full rounded border px-3 py-2" value={form.genre} onChange={(e) => setForm({ ...form, genre: e.target.value })} placeholder="Genre (comma separated)" />

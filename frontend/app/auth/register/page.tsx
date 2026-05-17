@@ -55,7 +55,7 @@ export default function RegisterPage() {
                 password: formData.password,
                 confirmPassword: formData.confirmPassword,
             })).unwrap();
-            router.replace("/home");
+            router.replace("/onboarding");
         } catch {
             // API error is already handled in redux state (`error`)
         }
@@ -65,7 +65,7 @@ export default function RegisterPage() {
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
+                    <div className="bg-[#D7B19D] px-8 py-6">
                         <h1 className="text-2xl font-bold text-white">Create an account</h1>
                         <p className="text-blue-100 mt-1">Sign up to get started</p>
                     </div>
@@ -83,8 +83,8 @@ export default function RegisterPage() {
                                 required
                                 value={formData.username}
                                 onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-gray-50/50"
-                                placeholder="John Doe"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#402218]  outline-none transition-colors bg-gray-50/50"
+                                placeholder="Enter your full name"
                                 disabled={loading}
                             />
                         </div>
@@ -101,8 +101,8 @@ export default function RegisterPage() {
                                 required
                                 value={formData.email}
                                 onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-gray-50/50"
-                                placeholder="hello@example.com"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#402218]  outline-none transition-colors bg-gray-50/50"
+                                placeholder="Enter your email"
                                 disabled={loading}
                             />
                         </div>
@@ -119,7 +119,7 @@ export default function RegisterPage() {
                                 required
                                 value={formData.password}
                                 onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-gray-50/50"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#402218]  outline-none transition-colors bg-gray-50/50"
                                 placeholder="********"
                                 disabled={loading}
                             />
@@ -138,7 +138,7 @@ export default function RegisterPage() {
                                 required
                                 value={formData.confirmPassword}
                                 onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-gray-50/50"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#402218]  outline-none transition-colors bg-gray-50/50"
                                 placeholder="********"
                                 disabled={loading}
                             />
@@ -153,14 +153,14 @@ export default function RegisterPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                            className="w-full bg-[#D7B19D] text-white py-3 px-4 rounded-lg font-medium hover:bg-[#D7B19D]  focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
                         >
                             {loading ? "Creating account..." : "Sign up"}
                         </button>
 
                         <p className="text-center text-sm text-gray-600">
                             Already have an account?{" "}
-                            <Link href="login" className="font-medium text-blue-600 hover:text-blue-500 hover:underline">
+                            <Link href="login" className="font-medium  hover:text-[#402218]  hover:underline">
                                 Log in
                             </Link>
                         </p>

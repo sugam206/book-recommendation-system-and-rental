@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 export enum Role {
     USER = 'user',
@@ -11,6 +11,7 @@ interface User {
     username: string;
     email: string;
     role: Role;
+    hasCompletedOnboarding?: boolean;
 }
 
 interface AuthState {
@@ -20,9 +21,18 @@ interface AuthState {
     error: string | null;
 }
 
-// ─── FIX: condition was backwards — server has no window, browser does ────────
+interface AuthSuccessPayload {
+    user: User;
+    token: string;
+}
+
+interface ApiErrorPayload {
+    message?: string;
+}
+
+
 const loadInitialState = (): AuthState => {
-    // Server-side: window doesn't exist, skip localStorage entirely
+
     if (typeof window === "undefined") {
         return { user: null, token: null, loading: false, error: null };
     }
@@ -48,8 +58,9 @@ export const registerUser = createAsyncThunk(
         try {
             const response = await axios.post('http://localhost:5000/api/auth/register', data);
             return response.data;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Register failed");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Register failed");
         }
     }
 );
@@ -60,8 +71,9 @@ export const loginUser = createAsyncThunk(
         try {
             const response = await axios.post('http://localhost:5000/api/auth/login', data);
             return response.data;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Login failed");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Login failed");
         }
     }
 );
@@ -80,7 +92,7 @@ const authSlice = createSlice({
                 localStorage.removeItem("user");
             }
         },
-        // Call this in your root layout on mount to rehydrate auth from localStorage
+
         loadUserFromStorage: (state) => {
             if (typeof window === "undefined") return;
             const token = localStorage.getItem("token");
@@ -98,7 +110,7 @@ const authSlice = createSlice({
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(registerUser.fulfilled, (state, action: PayloadAction<any>) => {
+            .addCase(registerUser.fulfilled, (state, action: PayloadAction<AuthSuccessPayload>) => {
                 state.loading = false;
                 state.user = action.payload.user;
                 state.token = action.payload.token;
@@ -107,9 +119,9 @@ const authSlice = createSlice({
                     localStorage.setItem("user", JSON.stringify(action.payload.user)); // FIX: was missing
                 }
             })
-            .addCase(registerUser.rejected, (state, action: any) => {
+            .addCase(registerUser.rejected, (state, action: PayloadAction<string | undefined>) => {
                 state.loading = false;
-                state.error = action.payload;
+                state.error = action.payload || "Register failed";
             })
 
             // Login
@@ -117,18 +129,18 @@ const authSlice = createSlice({
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(loginUser.fulfilled, (state, action: PayloadAction<any>) => {
+            .addCase(loginUser.fulfilled, (state, action: PayloadAction<AuthSuccessPayload>) => {
                 state.loading = false;
                 state.user = action.payload.user;
                 state.token = action.payload.token;
                 if (typeof window !== "undefined") {
                     localStorage.setItem("token", action.payload.token);
-                    localStorage.setItem("user", JSON.stringify(action.payload.user)); // FIX: was missing
+                    localStorage.setItem("user", JSON.stringify(action.payload.user));
                 }
             })
-            .addCase(loginUser.rejected, (state, action: any) => {
+            .addCase(loginUser.rejected, (state, action: PayloadAction<string | undefined>) => {
                 state.loading = false;
-                state.error = action.payload;
+                state.error = action.payload || "Login failed";
             });
     },
 });

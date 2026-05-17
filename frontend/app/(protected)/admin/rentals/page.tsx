@@ -6,15 +6,21 @@ import { RootState } from '@/app/reduxToolkit/store';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { toast } from 'react-toastify';
 
 interface Rental {
     _id: string;
-    userId: { username: string; email: string };
-    bookId: { title: string; author?: string; authorName?: string };
+    userId?: { username?: string; email?: string } | null;
+    providerId?: { username?: string; email?: string } | null;
+    bookId?: { title?: string; author?: string; authorName?: string } | null;
     rentStartDate: string;
     rentEndDate: string;
     amount: number;
-    status: 'pending' | 'active' | 'completed' | 'cancelled';
+    depositAmount?: number;
+    paymentStatus: 'pending' | 'held' | 'released' | 'refund_pending' | 'refunded';
+    providerDecision: 'pending' | 'accepted' | 'rejected';
+    adminDecision: 'pending' | 'confirmed_start' | 'confirmed_completion' | 'refund_processed';
+    status: 'payment_pending' | 'deposit_held' | 'provider_accepted' | 'refund_pending' | 'active' | 'completed' | 'refunded' | 'cancelled';
     createdAt: string;
 }
 
@@ -43,7 +49,7 @@ export default function RentalsPage() {
     const [formError, setFormError] = useState('');
     const [formSuccess, setFormSuccess] = useState('');
     const [creating, setCreating] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'active' | 'completed' | 'cancelled'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'deposit_held' | 'provider_accepted' | 'refund_pending' | 'active' | 'completed' | 'refunded'>('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [newRentForm, setNewRentForm] = useState({
@@ -86,8 +92,10 @@ export default function RentalsPage() {
             setRentals(response.data.rents || []);
             setTotalPages(response.data.pagination?.totalPages || 1);
             setError('');
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to fetch rentals');
+        } catch (err: unknown) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.message : undefined;
+            setError(message || 'Failed to fetch rentals');
+            toast.error(message || 'Failed to fetch rentals');
         } finally {
             setLoading(false);
         }
@@ -103,8 +111,10 @@ export default function RentalsPage() {
 
             setBooks(booksRes.data.books || []);
             setUsers((usersRes.data.users || []).filter((u: UserOption) => u.role !== 'admin'));
-        } catch (err: any) {
-            setFormError(err.response?.data?.message || 'Failed to load users/books for rent form');
+        } catch (err: unknown) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.message : undefined;
+            setFormError(message || 'Failed to load users/books for rent form');
+            toast.error(message || 'Failed to load users/books for rent form');
         }
     };
 
@@ -139,6 +149,7 @@ export default function RentalsPage() {
             );
 
             setFormSuccess('Book rent created successfully');
+            toast.success('Book rent created successfully');
             setNewRentForm({
                 userId: '',
                 bookId: '',
@@ -147,8 +158,10 @@ export default function RentalsPage() {
                 amount: ''
             });
             fetchRentals();
-        } catch (err: any) {
-            setFormError(err.response?.data?.message || 'Failed to create rent');
+        } catch (err: unknown) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.message : undefined;
+            setFormError(message || 'Failed to create rent');
+            toast.error(message || 'Failed to create rent');
         } finally {
             setCreating(false);
         }
@@ -156,14 +169,18 @@ export default function RentalsPage() {
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'pending':
+            case 'deposit_held':
                 return <Clock className="w-4 h-4" />;
+            case 'provider_accepted':
+                return <Clock className="w-4 h-4 text-indigo-600" />;
+            case 'refund_pending':
+                return <XCircle className="w-4 h-4 text-orange-600" />;
             case 'active':
                 return <CheckCircle className="w-4 h-4 text-green-600" />;
             case 'completed':
                 return <CheckCircle className="w-4 h-4 text-blue-600" />;
-            case 'cancelled':
-                return <XCircle className="w-4 h-4 text-red-600" />;
+            case 'refunded':
+                return <CheckCircle className="w-4 h-4 text-emerald-600" />;
             default:
                 return null;
         }
@@ -171,14 +188,18 @@ export default function RentalsPage() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'pending':
+            case 'deposit_held':
                 return 'bg-yellow-100 text-yellow-700';
+            case 'provider_accepted':
+                return 'bg-indigo-100 text-indigo-700';
+            case 'refund_pending':
+                return 'bg-orange-100 text-orange-700';
             case 'active':
                 return 'bg-green-100 text-green-700';
             case 'completed':
                 return 'bg-blue-100 text-blue-700';
-            case 'cancelled':
-                return 'bg-red-100 text-red-700';
+            case 'refunded':
+                return 'bg-emerald-100 text-emerald-700';
             default:
                 return 'bg-gray-100 text-gray-700';
         }
@@ -284,7 +305,7 @@ export default function RentalsPage() {
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Manage Rentals</h1>
                     <div className="flex gap-2">
-                        {(['all', 'pending', 'active', 'completed', 'cancelled'] as const).map((status) => (
+                        {(['all', 'deposit_held', 'provider_accepted', 'refund_pending', 'active', 'completed', 'refunded'] as const).map((status) => (
                             <button
                                 key={status}
                                 onClick={() => {
@@ -315,33 +336,38 @@ export default function RentalsPage() {
                                 <th className="px-4 py-3 text-left">User</th>
                                 <th className="px-4 py-3 text-left">Book</th>
                                 <th className="px-4 py-3 text-left">Rent Period</th>
-                                <th className="px-4 py-3 text-left">Amount</th>
+                                <th className="px-4 py-3 text-left">Deposit</th>
                                 <th className="px-4 py-3 text-left">Status</th>
+                                <th className="px-4 py-3 text-left">Payment</th>
                                 <th className="px-4 py-3 text-left">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {rentals.map((rental) => (
-                                <tr key={rental._id} className="border-b hover:bg-gray-50">
+                                    <tr key={rental._id} className="border-b hover:bg-gray-50">
                                     <td className="px-4 py-3">
-                                        <div className="font-medium">{rental.userId.username}</div>
-                                        <div className="text-sm text-gray-500">{rental.userId.email}</div>
+                                        <div className="font-medium">{rental.userId?.username || 'User unavailable'}</div>
+                                        <div className="text-sm text-gray-500">{rental.userId?.email || '-'}</div>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <div className="font-medium">{rental.bookId.title}</div>
-                                        <div className="text-sm text-gray-500">{rental.bookId.authorName || rental.bookId.author || '-'}</div>
+                                        <div className="font-medium">{rental.bookId?.title || 'Book unavailable'}</div>
+                                        <div className="text-sm text-gray-500">{rental.bookId?.authorName || rental.bookId?.author || '-'}</div>
                                     </td>
                                     <td className="px-4 py-3 text-sm">
                                         <div>{new Date(rental.rentStartDate).toLocaleDateString()}</div>
                                         <div className="text-gray-500">to</div>
                                         <div>{new Date(rental.rentEndDate).toLocaleDateString()}</div>
                                     </td>
-                                    <td className="px-4 py-3 font-medium">Rs. {rental.amount}</td>
+                                    <td className="px-4 py-3 font-medium">Rs. {rental.depositAmount ?? rental.amount}</td>
                                     <td className="px-4 py-3">
                                         <span className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 w-fit ${getStatusColor(rental.status)}`}>
                                             {getStatusIcon(rental.status)}
                                             {rental.status}
                                         </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                        <div>{rental.paymentStatus}</div>
+                                        <div className="text-xs text-gray-400">{rental.providerDecision}</div>
                                     </td>
                                     <td className="px-4 py-3">
                                         <button

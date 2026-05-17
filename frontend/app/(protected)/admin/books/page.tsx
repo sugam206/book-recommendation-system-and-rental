@@ -5,6 +5,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/app/reduxToolkit/store';
 import { fetchBooks, createBookThunk, deleteBookThunk } from '@/app/reduxToolkit/slice';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import { Trash2, Edit2, Eye, X, Upload, BookPlus, ImagePlus } from 'lucide-react';
 
 const GENRES = ['Fiction', 'Non-Fiction', 'Science', 'History', 'Biography', 'Fantasy', 'Mystery', 'Romance', 'Thriller', 'Self-Help', 'Other'];
@@ -12,6 +13,8 @@ const GENRES = ['Fiction', 'Non-Fiction', 'Science', 'History', 'Biography', 'Fa
 interface BookForm {
     title: string;
     authorName: string;
+    price: string;
+    rentalProviderId: string;
     publishedDate: string;
     pages: string;
     genre: string;
@@ -21,9 +24,16 @@ interface BookForm {
 }
 
 const EMPTY_FORM: BookForm = {
-    title: '', authorName: '', publishedDate: '',
+    title: '', authorName: '', price: '', rentalProviderId: '', publishedDate: '',
     pages: '', genre: '', description: '', tags: '', image: null,
 };
+
+interface RentalProviderOption {
+    _id: string;
+    username: string;
+    email: string;
+    rentalStatus?: string;
+}
 
 // ─── Add Book Modal ───────────────────────────────────────────────────────────
 function AddBookModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (f: FormData) => Promise<void> }) {
@@ -31,6 +41,22 @@ function AddBookModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (f
     const [preview, setPreview] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [providers, setProviders] = useState<RentalProviderOption[]>([]);
+
+    useEffect(() => {
+        const loadProviders = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get('http://localhost:5000/api/users', {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                setProviders((response.data?.users || []).filter((user: RentalProviderOption) => user.rentalStatus === 'approved'));
+            } catch {
+                setProviders([]);
+            }
+        };
+        loadProviders();
+    }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
         setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -49,14 +75,16 @@ function AddBookModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (f
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!form.title || !form.authorName || !form.publishedDate || !form.pages) {
-            return setError('Title, author, published date and pages are required.');
+        if (!form.title || !form.authorName || !form.price || !form.rentalProviderId || !form.publishedDate || !form.pages) {
+            return setError('Title, author, price, rental provider, published date and pages are required.');
         }
         if (!form.image) return setError('Cover image is required.');
 
         const formData = new FormData();
         formData.append('title', form.title);
         formData.append('authorName', form.authorName);
+        formData.append('price', form.price);
+        formData.append('rentalProviderId', form.rentalProviderId);
         formData.append('publishedDate', form.publishedDate);
         formData.append('pages', form.pages);
         formData.append('genre', form.genre);
@@ -145,8 +173,34 @@ function AddBookModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (f
                         ))}
                     </div>
 
-                    {/* Date & Pages */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Price, Provider, Date & Pages */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-stone-600 mb-1.5">
+                                Price / Deposit <span className="text-red-400">*</span>
+                            </label>
+                            <input type="number" name="price" value={form.price} onChange={handleChange}
+                                placeholder="e.g. 850" min={0}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-stone-600 mb-1.5">
+                                Rental Provider <span className="text-red-400">*</span>
+                            </label>
+                            <select
+                                name="rentalProviderId"
+                                value={form.rentalProviderId}
+                                onChange={handleChange}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                            >
+                                <option value="">Select provider</option>
+                                {providers.map((provider) => (
+                                    <option key={provider._id} value={provider._id}>
+                                        {provider.username} ({provider.email})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <div>
                             <label className="block text-xs font-semibold text-stone-600 mb-1.5">
                                 Published Date <span className="text-red-400">*</span>
@@ -220,12 +274,11 @@ function AddBookModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (f
 export default function BooksPage() {
     const dispatch = useDispatch<AppDispatch>();
     const router = useRouter();
-    const { books, loading, error } = useSelector((state: RootState) => state.books);
+    const { books, loading, error, pagination } = useSelector((state: RootState) => state.books);
     const { user } = useSelector((state: RootState) => state.auth);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [deleteError, setDeleteError] = useState('');
 
@@ -233,15 +286,14 @@ export default function BooksPage() {
         if (user && user.role !== 'admin') router.push('/profile');
     }, [user, router]);
 
-    useEffect(() => {
-        dispatch(fetchBooks());
-    }, [dispatch]);
+    const limit = 10;
 
-    // Client-side search filter on Redux books
-    const filtered = books.filter(b =>
-        b.bookName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        b.authorName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    useEffect(() => {
+        dispatch(fetchBooks({ page: currentPage, limit, search: searchTerm || undefined }));
+    }, [dispatch, currentPage, searchTerm]);
+
+    const totalPages = Math.max(1, pagination.totalPages ?? 1);
+    const displayBooks = books;
 
     const handleAddBook = async (formData: FormData) => {
         const result = await dispatch(createBookThunk(formData));
@@ -285,7 +337,7 @@ export default function BooksPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                     <div>
                         <h1 className="text-2xl font-bold text-stone-900">Manage Books</h1>
-                        <p className="text-sm text-stone-400 mt-0.5">{filtered.length} books total</p>
+                        <p className="text-sm text-stone-400 mt-0.5">{pagination.total} books total</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <input
@@ -319,13 +371,14 @@ export default function BooksPage() {
                                 <th className="px-4 py-3">Title</th>
                                 <th className="px-4 py-3">Author</th>
                                 <th className="px-4 py-3">Genre</th>
+                                <th className="px-4 py-3">Price</th>
                                 <th className="px-4 py-3">Pages</th>
                                 <th className="px-4 py-3">Published</th>
                                 <th className="px-4 py-3">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {filtered.map((book) => (
+                            {displayBooks.map((book) => (
                                 <tr key={book.id} className="hover:bg-stone-50 transition-colors">
                                     <td className="px-4 py-3">
                                         {book.image ? (
@@ -337,7 +390,7 @@ export default function BooksPage() {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 font-semibold text-stone-900 max-w-[160px] truncate">{book.bookName}</td>
+                                    <td className="px-4 py-3 font-semibold text-stone-900 max-w-40 truncate">{book.bookName}</td>
                                     <td className="px-4 py-3 text-stone-600">{book.authorName}</td>
                                     <td className="px-4 py-3">
                                         {book.genre?.[0] ? (
@@ -346,6 +399,7 @@ export default function BooksPage() {
                                             </span>
                                         ) : <span className="text-stone-300">—</span>}
                                     </td>
+                                    <td className="px-4 py-3 text-stone-700 font-medium">Rs. {book.price}</td>
                                     <td className="px-4 py-3 text-stone-500">{book.pages}</td>
                                     <td className="px-4 py-3 text-stone-400 text-xs">
                                         {new Date(book.publishedDate).toLocaleDateString()}
@@ -372,7 +426,7 @@ export default function BooksPage() {
                     </table>
                 </div>
 
-                {filtered.length === 0 && !loading && (
+                {displayBooks.length === 0 && !loading && (
                     <div className="text-center py-16 text-stone-400">
                         <BookPlus className="w-10 h-10 mx-auto mb-3 opacity-30" />
                         <p className="font-serif italic">No books found. Add your first book!</p>

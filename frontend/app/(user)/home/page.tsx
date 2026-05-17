@@ -2,7 +2,7 @@
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from '@/app/reduxToolkit/store';
 import { fetchBooks, toggleFavoriteBook } from '@/app/reduxToolkit/slice';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import BookGrid, { IBook } from '@/components/ui/bookGrid';
 
@@ -22,6 +22,7 @@ export default function Home() {
     const { token } = useSelector((state: RootState) => state.auth);
     const [recommendedBooks, setRecommendedBooks] = useState<IBook[]>([]);
     const [recommendationLoading, setRecommendationLoading] = useState(true);
+    const favoriteSet = useMemo(() => new Set(books.filter((b) => b.isFavourite).map((b) => b.id)), [books]);
 
     useEffect(() => {
         dispatch(fetchBooks());
@@ -42,7 +43,6 @@ export default function Home() {
                 });
 
                 const data = (response.data?.data || []) as any[];
-                const favoriteSet = new Set(books.filter((b) => b.isFavourite).map((b) => b.id));
                 const mapped: IBook[] = data.map((raw) => ({
                     id: String(raw._id ?? raw.id),
                     bookName: raw.title ?? raw.bookName,
@@ -58,6 +58,7 @@ export default function Home() {
                     description: raw.description,
                     tags: raw.tags ?? [],
                     readingStatus: null,
+                    isAvailableForRent: raw.isAvailableForRent ?? true,
                 }));
                 setRecommendedBooks(mapped);
             } catch {
@@ -68,7 +69,16 @@ export default function Home() {
         };
 
         fetchRecommendations();
-    }, [token, books]);
+    }, [token]);
+
+    useEffect(() => {
+        setRecommendedBooks((prev) =>
+            prev.map((item) => ({
+                ...item,
+                isFavourite: favoriteSet.has(item.id)
+            }))
+        );
+    }, [favoriteSet]);
 
     const handleToggleFavoriteInRecommendations = async (bookId: string) => {
         setRecommendedBooks((prev) =>

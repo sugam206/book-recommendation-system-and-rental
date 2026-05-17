@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 // Type definitions
 interface ProfileUser {
@@ -7,6 +7,9 @@ interface ProfileUser {
     username: string;
     email: string;
     profilePicture: string | null;
+    preferredGenres?: string[];
+    preferredAuthors?: string[];
+    hasCompletedOnboarding?: boolean;
     isRenter: boolean;
     rentalStatus: 'inactive' | 'pending' | 'approved' | 'rejected';
     createdAt: string;
@@ -29,6 +32,10 @@ interface ProfileState {
         renterServices: { loading: boolean; error: string | null };
         stats: { loading: boolean; error: string | null };
     };
+}
+
+interface ApiErrorPayload {
+    message?: string;
 }
 
 const initialState: ProfileState = {
@@ -61,8 +68,9 @@ export const fetchProfileData = createAsyncThunk(
                 user: profileRes.data.user,
                 statistics: statsRes.data.statistics
             };
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Failed to fetch profile");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Failed to fetch profile");
         }
     }
 );
@@ -78,8 +86,33 @@ export const updateBasicInfo = createAsyncThunk(
                 headers: { Authorization: `Bearer ${token}` }
             });
             return response.data.user;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Failed to update profile");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Failed to update profile");
+        }
+    }
+);
+
+export const completeOnboarding = createAsyncThunk(
+    'profile/completeOnboarding',
+    async (
+        {
+            data,
+            token
+        }: {
+            data: { preferredGenres: string[]; preferredAuthors: string[]; hasCompletedOnboarding: boolean };
+            token: string;
+        },
+        { rejectWithValue }
+    ) => {
+        try {
+            const response = await axios.put(`${API_BASE}/users/profile`, data, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return response.data.user;
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Failed to save onboarding preferences");
         }
     }
 );
@@ -98,8 +131,9 @@ export const uploadProfilePicture = createAsyncThunk(
                 }
             });
             return response.data.user;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Failed to upload picture");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Failed to upload picture");
         }
     }
 );
@@ -112,8 +146,9 @@ export const deleteProfilePicture = createAsyncThunk(
                 headers: { Authorization: `Bearer ${token}` }
             });
             return response.data.user;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Failed to delete picture");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Failed to delete picture");
         }
     }
 );
@@ -135,8 +170,9 @@ export const changePassword = createAsyncThunk(
                 headers: { Authorization: `Bearer ${token}` }
             });
             return response.data;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Failed to change password");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Failed to change password");
         }
     }
 );
@@ -149,8 +185,9 @@ export const enableRenterServices = createAsyncThunk(
                 headers: { Authorization: `Bearer ${token}` }
             });
             return response.data.user;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Failed to update renter status");
+        } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorPayload>;
+            return rejectWithValue(axiosError.response?.data?.message || "Failed to update renter status");
         }
     }
 );
@@ -208,6 +245,20 @@ const profileSlice = createSlice({
                 state.user = action.payload;
             })
             .addCase(updateBasicInfo.rejected, (state, action) => {
+                state.sections.basicInfo.loading = false;
+                state.sections.basicInfo.error = action.payload as string;
+            });
+
+        builder
+            .addCase(completeOnboarding.pending, (state) => {
+                state.sections.basicInfo.loading = true;
+                state.sections.basicInfo.error = null;
+            })
+            .addCase(completeOnboarding.fulfilled, (state, action) => {
+                state.sections.basicInfo.loading = false;
+                state.user = action.payload;
+            })
+            .addCase(completeOnboarding.rejected, (state, action) => {
                 state.sections.basicInfo.loading = false;
                 state.sections.basicInfo.error = action.payload as string;
             });
